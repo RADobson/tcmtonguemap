@@ -2,41 +2,260 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600&display=swap');
-
 :root {
   --foreground-rgb: 26, 26, 46;
   --background-start-rgb: 250, 248, 243;
   --background-end-rgb: 255, 255, 255;
+  
+  /* TCM Brand Colors */
+  --tcm-green: 45, 90, 39;
+  --tcm-green-dark: 26, 61, 22;
+  --tcm-brown: 139, 69, 19;
+  --tcm-gold: 201, 162, 39;
+  --tcm-red: 196, 30, 58;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    color: rgb(var(--foreground-rgb));
+    background: linear-gradient(
+        to bottom,
+        transparent,
+        rgb(var(--background-end-rgb))
+      )
+      rgb(var(--background-start-rgb));
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+  }
+  
+  /* Mobile touch improvements */
+  button, a, input, textarea, select {
+    touch-action: manipulation;
+  }
+  
+  /* Prevent zoom on input focus for iOS */
+  @supports (-webkit-touch-callout: none) {
+    input, textarea, select {
+      font-size: 16px;
+    }
+  }
+}
+
+@layer components {
+  /* Touch-friendly tap targets */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .touch-manipulation:active {
+    transform: scale(0.98);
+  }
+  
+  /* Safe area for notched phones */
+  .safe-area-inset {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Bottom sheet style for mobile */
+  .bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-radius: 24px 24px 0 0;
+    padding: 24px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+    max-height: 90vh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-out;
+  }
+  
+  .bottom-sheet.open {
+    transform: translateY(0);
+  }
+  
+  /* Pull indicator for bottom sheet */
+  .bottom-sheet::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: #e5e7eb;
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  
+  /* Mobile-optimized card */
+  .mobile-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  
+  /* Full-width button for mobile */
+  .btn-mobile-full {
+    width: 100%;
+    min-height: 56px;
+    padding: 16px 24px;
+    font-size: 17px;
+    font-weight: 600;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  /* Floating action button */
+  .fab {
+    position: fixed;
+    bottom: calc(24px + env(safe-area-inset-bottom));
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgb(var(--tcm-green)) 0%, rgb(var(--tcm-green-dark)) 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(45, 90, 39, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  
+  /* Image container for mobile */
+  .image-container-mobile {
+    position: relative;
+    aspect-ratio: 4/3;
+    max-height: 60vh;
+    overflow: hidden;
+    border-radius: 16px;
+    background: #f3f4f6;
+  }
+  
+  /* Sticky header for mobile */
+  .sticky-header-mobile {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+  
+  /* Safe area utilities */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Prevent text selection on UI elements */
+  .select-none {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* GPU acceleration for smooth animations */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+}
+
+/* Keyframes */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* TCM Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #faf8f3;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c9a227;
-  border-radius: 4px;
+  background: #d1d5db;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a0821f;
+  background: #9ca3af;
 }
 
 /* TCM Card Styles */
@@ -44,6 +263,7 @@ body {
   background: linear-gradient(135deg, #ffffff 0%, #faf8f3 100%);
   border: 1px solid rgba(201, 162, 39, 0.2);
   box-shadow: 0 4px 6px -1px rgba(45, 90, 39, 0.1), 0 2px 4px -1px rgba(45, 90, 39, 0.06);
+  transition: all 0.2s ease;
 }
 
 .tcm-card:hover {
@@ -55,26 +275,32 @@ body {
   background: linear-gradient(135deg, #2d5a27 0%, #1a3d16 100%);
   border: 1px solid #1a3d16;
   color: white;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .btn-tcm-primary:hover {
   background: linear-gradient(135deg, #3d7a35 0%, #2d5a27 100%);
-  transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(45, 90, 39, 0.3);
+}
+
+.btn-tcm-primary:active {
+  transform: scale(0.98);
 }
 
 .btn-tcm-secondary {
   background: linear-gradient(135deg, #8b4513 0%, #5c2e0c 100%);
   border: 1px solid #5c2e0c;
   color: white;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .btn-tcm-secondary:hover {
   background: linear-gradient(135deg, #a0522d 0%, #8b4513 100%);
-  transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(139, 69, 19, 0.3);
+}
+
+.btn-tcm-secondary:active {
+  transform: scale(0.98);
 }
 
 /* TCM Badge Styles */
@@ -106,7 +332,6 @@ body {
 .tcm-seal {
   border: 2px solid #c41e3a;
   color: #c41e3a;
-  font-family: 'Noto Serif SC', serif;
   font-weight: 700;
   border-radius: 4px;
   display: inline-flex;
@@ -121,67 +346,6 @@ body {
   margin: 2rem 0;
 }
 
-/* Educational Content Accordion */
-.edu-accordion-content {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease-out;
-}
-
-.edu-accordion-content.open {
-  max-height: 1000px;
-}
-
-/* Tongue Zone Map */
-.tongue-zone {
-  position: relative;
-  transition: all 0.3s ease;
-}
-
-.tongue-zone:hover {
-  filter: brightness(1.05);
-}
-
-.tongue-zone.active {
-  stroke: #c9a227;
-  stroke-width: 2;
-}
-
-/* Herbal Formula Card */
-.formula-card {
-  background: linear-gradient(135deg, #faf8f3 0%, #f5f0e6 100%);
-  border-left: 4px solid #2d5a27;
-}
-
-/* Animation Classes */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.6s ease-out forwards;
-}
-
-@keyframes pulse-soft {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-.animate-pulse-soft {
-  animation: pulse-soft 2s ease-in-out infinite;
-}
-
 /* Print Styles */
 @media print {
   .no-print {
@@ -191,5 +355,16 @@ body {
   .tcm-card {
     box-shadow: none;
     border: 1px solid #ccc;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
