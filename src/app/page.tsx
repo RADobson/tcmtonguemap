@@ -8,12 +8,21 @@ import { compressImageForMobile } from '@/lib/imageCompression'
 
 interface AnalysisResult {
   primaryPattern: string
+  secondaryPatterns?: string[]
   coat: string
   color: string
   shape: string
   moisture: string
   recommendations?: string
   recommendedFormula: string
+  severity?: 'mild' | 'moderate' | 'significant'
+  tongueZones?: {
+    tip: string
+    center: string
+    root: string
+    sides: string
+  }
+  saved?: boolean
 }
 
 export default function Home() {
