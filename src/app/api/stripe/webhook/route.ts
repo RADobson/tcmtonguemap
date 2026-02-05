@@ -40,26 +40,34 @@ export async function POST(req: NextRequest) {
         
         // Get subscription details
         if (session.subscription) {
-          const subscription = await stripe.subscriptions.retrieve(
+          const subscriptionData = await stripe.subscriptions.retrieve(
             session.subscription as string
-          )
+          ) as unknown as Stripe.Subscription
           
-          const userId = session.metadata?.supabaseUserId
+          // Get user ID from subscription metadata or session
+          const userId = subscriptionData.metadata?.supabaseUserId || session.metadata?.supabaseUserId
           
           if (userId) {
+            const periodStart = subscriptionData.current_period_start 
+              ? new Date((subscriptionData.current_period_start as number) * 1000).toISOString()
+              : new Date().toISOString()
+            const periodEnd = subscriptionData.current_period_end
+              ? new Date((subscriptionData.current_period_end as number) * 1000).toISOString()
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            
             // Update subscription in database
             await supabase
               .from('subscriptions')
               .upsert({
                 user_id: userId,
                 stripe_customer_id: session.customer as string,
-                stripe_subscription_id: subscription.id,
-                stripe_price_id: subscription.items.data[0]?.price.id,
-                status: subscription.status,
+                stripe_subscription_id: subscriptionData.id,
+                stripe_price_id: subscriptionData.items.data[0]?.price.id,
+                status: subscriptionData.status,
                 tier: 'premium',
-                current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-                cancel_at_period_end: subscription.cancel_at_period_end,
+                current_period_start: periodStart,
+                current_period_end: periodEnd,
+                cancel_at_period_end: subscriptionData.cancel_at_period_end,
               }, {
                 onConflict: 'user_id',
               })
@@ -67,7 +75,7 @@ export async function POST(req: NextRequest) {
             // Track subscription created event
             await trackSubscriptionEvent('created', {
               userId,
-              subscriptionId: subscription.id,
+              subscriptionId: subscriptionData.id,
               tier: 'premium',
               value: (session.amount_total || 0) / 100,
               currency: session.currency || 'usd',
@@ -81,26 +89,33 @@ export async function POST(req: NextRequest) {
         const invoice = event.data.object as Stripe.Invoice
         
         if (invoice.subscription) {
-          const subscription = await stripe.subscriptions.retrieve(
+          const subscriptionData = await stripe.subscriptions.retrieve(
             invoice.subscription as string
-          )
+          ) as unknown as Stripe.Subscription
           
           // Get user ID from subscription metadata
-          const userId = subscription.metadata?.supabaseUserId
+          const userId = subscriptionData.metadata?.supabaseUserId
           
           if (userId) {
+            const periodStart = subscriptionData.current_period_start 
+              ? new Date((subscriptionData.current_period_start as number) * 1000).toISOString()
+              : new Date().toISOString()
+            const periodEnd = subscriptionData.current_period_end
+              ? new Date((subscriptionData.current_period_end as number) * 1000).toISOString()
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            
             await supabase
               .from('subscriptions')
               .upsert({
                 user_id: userId,
                 stripe_customer_id: invoice.customer as string,
-                stripe_subscription_id: subscription.id,
-                stripe_price_id: subscription.items.data[0]?.price.id,
-                status: subscription.status,
+                stripe_subscription_id: subscriptionData.id,
+                stripe_price_id: subscriptionData.items.data[0]?.price.id,
+                status: subscriptionData.status,
                 tier: 'premium',
-                current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-                cancel_at_period_end: subscription.cancel_at_period_end,
+                current_period_start: periodStart,
+                current_period_end: periodEnd,
+                cancel_at_period_end: subscriptionData.cancel_at_period_end,
               }, {
                 onConflict: 'user_id',
               })
@@ -108,7 +123,7 @@ export async function POST(req: NextRequest) {
             // Track payment succeeded event
             await trackSubscriptionEvent('payment_succeeded', {
               userId,
-              subscriptionId: subscription.id,
+              subscriptionId: subscriptionData.id,
               tier: 'premium',
               value: (invoice.amount_paid || 0) / 100,
               currency: invoice.currency || 'usd',
@@ -124,12 +139,19 @@ export async function POST(req: NextRequest) {
         const userId = subscription.metadata?.supabaseUserId
         
         if (userId) {
+          const periodStart = subscription.current_period_start 
+            ? new Date((subscription.current_period_start as number) * 1000).toISOString()
+            : new Date().toISOString()
+          const periodEnd = subscription.current_period_end
+            ? new Date((subscription.current_period_end as number) * 1000).toISOString()
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          
           await supabase
             .from('subscriptions')
             .update({
               status: subscription.status,
-              current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              current_period_start: periodStart,
+              current_period_end: periodEnd,
               cancel_at_period_end: subscription.cancel_at_period_end,
               tier: subscription.status === 'active' ? 'premium' : 'free',
               updated_at: new Date().toISOString(),

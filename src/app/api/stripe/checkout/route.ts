@@ -30,6 +30,9 @@ export async function POST(req: NextRequest) {
         },
       ],
       mode: 'subscription',
+      metadata: {
+        supabaseUserId: user.id,
+      },
       subscription_data: {
         metadata: {
           supabaseUserId: user.id,
