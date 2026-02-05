@@ -7,6 +7,36 @@ import { trackSubscriptionEvent } from '@/lib/analytics-server'
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
+// Helper type for subscription data with period fields
+interface SubscriptionData {
+  id: string
+  status: string
+  metadata?: { supabaseUserId?: string }
+  items: { data: Array<{ price: { id: string } }> }
+  cancel_at_period_end: boolean
+  current_period_start?: number
+  current_period_end?: number
+}
+
+// Invoice type with subscription
+interface InvoiceData {
+  subscription?: string | null
+  customer?: string
+  amount_paid?: number
+  currency?: string
+}
+
+function getSubscriptionDates(subscription: SubscriptionData) {
+  const now = new Date()
+  const periodStart = subscription.current_period_start 
+    ? new Date(subscription.current_period_start * 1000).toISOString()
+    : now.toISOString()
+  const periodEnd = subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000).toISOString()
+    : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  return { periodStart, periodEnd }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text()
@@ -42,18 +72,13 @@ export async function POST(req: NextRequest) {
         if (session.subscription) {
           const subscriptionData = await stripe.subscriptions.retrieve(
             session.subscription as string
-          ) as unknown as Stripe.Subscription
+          ) as unknown as SubscriptionData
           
           // Get user ID from subscription metadata or session
           const userId = subscriptionData.metadata?.supabaseUserId || session.metadata?.supabaseUserId
           
           if (userId) {
-            const periodStart = subscriptionData.current_period_start 
-              ? new Date((subscriptionData.current_period_start as number) * 1000).toISOString()
-              : new Date().toISOString()
-            const periodEnd = subscriptionData.current_period_end
-              ? new Date((subscriptionData.current_period_end as number) * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            const { periodStart, periodEnd } = getSubscriptionDates(subscriptionData)
             
             // Update subscription in database
             await supabase
@@ -86,23 +111,18 @@ export async function POST(req: NextRequest) {
       }
 
       case 'invoice.payment_succeeded': {
-        const invoice = event.data.object as Stripe.Invoice
+        const invoice = event.data.object as unknown as InvoiceData
         
         if (invoice.subscription) {
           const subscriptionData = await stripe.subscriptions.retrieve(
             invoice.subscription as string
-          ) as unknown as Stripe.Subscription
+          ) as unknown as SubscriptionData
           
           // Get user ID from subscription metadata
           const userId = subscriptionData.metadata?.supabaseUserId
           
           if (userId) {
-            const periodStart = subscriptionData.current_period_start 
-              ? new Date((subscriptionData.current_period_start as number) * 1000).toISOString()
-              : new Date().toISOString()
-            const periodEnd = subscriptionData.current_period_end
-              ? new Date((subscriptionData.current_period_end as number) * 1000).toISOString()
-              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            const { periodStart, periodEnd } = getSubscriptionDates(subscriptionData)
             
             await supabase
               .from('subscriptions')
@@ -134,17 +154,12 @@ export async function POST(req: NextRequest) {
       }
 
       case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription
+        const subscription = event.data.object as unknown as SubscriptionData
         
         const userId = subscription.metadata?.supabaseUserId
         
         if (userId) {
-          const periodStart = subscription.current_period_start 
-            ? new Date((subscription.current_period_start as number) * 1000).toISOString()
-            : new Date().toISOString()
-          const periodEnd = subscription.current_period_end
-            ? new Date((subscription.current_period_end as number) * 1000).toISOString()
-            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          const { periodStart, periodEnd } = getSubscriptionDates(subscription)
           
           await supabase
             .from('subscriptions')
@@ -162,7 +177,7 @@ export async function POST(req: NextRequest) {
       }
 
       case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription
+        const subscription = event.data.object as unknown as SubscriptionData
         const userId = subscription.metadata?.supabaseUserId
         
         // Downgrade to free tier when subscription is canceled
@@ -191,7 +206,7 @@ export async function POST(req: NextRequest) {
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice
+        const invoice = event.data.object as unknown as InvoiceData
         
         if (invoice.subscription) {
           await supabase
