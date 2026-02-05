@@ -1,10 +1,21 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Upload, Camera, Loader2, Sparkles, Shield, Leaf } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { 
+  Upload, 
+  Camera, 
+  Loader2, 
+  Sparkles, 
+  Shield, 
+  Leaf, 
+  Crown,
+  Zap,
+  AlertCircle,
+  Lock
+} from 'lucide-react'
+import Link from 'next/link'
 import ImageUploader from '@/components/ImageUploader'
 import AnalysisResults from '@/components/AnalysisResults'
-import { compressImageForMobile } from '@/lib/imageCompression'
 
 interface AnalysisResult {
   primaryPattern: string
@@ -25,11 +36,54 @@ interface AnalysisResult {
   saved?: boolean
 }
 
+interface ScanStatus {
+  canScan: boolean
+  tier: string
+  scansToday: number
+  scansRemaining: number
+  message: string
+}
+
 export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null)
+  const [subscription, setSubscription] = useState<any>(null)
+  const [loadingStatus, setLoadingStatus] = useState(true)
+
+  // Check scan status on load
+  useEffect(() => {
+    checkScanStatus()
+    fetchSubscriptionStatus()
+  }, [])
+
+  const checkScanStatus = async () => {
+    try {
+      const response = await fetch('/api/scan-limit')
+      if (response.ok) {
+        const data = await response.json()
+        setScanStatus(data)
+      }
+    } catch (err) {
+      console.error('Error checking scan status:', err)
+    } finally {
+      setLoadingStatus(false)
+    }
+  }
+
+  const fetchSubscriptionStatus = async () => {
+    try {
+      const response = await fetch('/api/subscription/status')
+      if (response.ok) {
+        const data = await response.json()
+        setSubscription(data)
+      }
+    } catch (err) {
+      console.error('Error fetching subscription:', err)
+    }
+  }
 
   const handleImageSelect = useCallback(async (imageData: string) => {
     setSelectedImage(imageData)
@@ -46,24 +100,24 @@ export default function Home() {
   const handleAnalyze = useCallback(async () => {
     if (!selectedImage) return
     
+    // Check scan limit before analyzing
+    const scanCheckResponse = await fetch('/api/scan-limit')
+    if (scanCheckResponse.ok) {
+      const scanData = await scanCheckResponse.json()
+      if (!scanData.canScan) {
+        setError('Daily scan limit reached. Upgrade to Premium for unlimited scans!')
+        return
+      }
+    }
+    
     setIsAnalyzing(true)
     setError(null)
     
     try {
-      // Get connection info for adaptive compression
-      const connection = (navigator as any).connection
-      const connectionType = connection?.effectiveType
-      
-      // Compress image before sending
-      let imageToSend = selectedImage
-      
-      // If it's a data URL from a large file, we might want to compress further
-      // But for now, the ImageUploader already compresses it
-      
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: imageToSend }),
+        body: JSON.stringify({ image: selectedImage }),
       })
       
       if (!response.ok) {
@@ -72,6 +126,13 @@ export default function Home() {
       }
       
       const data = await response.json()
+      
+      // Record the scan after successful analysis
+      await fetch('/api/scan-limit', { method: 'POST' })
+      
+      // Refresh scan status
+      await checkScanStatus()
+      
       setResult(data)
       
       // Scroll to results on mobile
@@ -90,14 +151,22 @@ export default function Home() {
     setSelectedImage(null)
     setResult(null)
     setError(null)
+    checkScanStatus()
   }, [])
+
+  const isPremium = subscription?.hasPremium
+  const hasNoScansRemaining = scanStatus && !scanStatus.canScan && scanStatus.tier === 'free'
 
   // Show results view
   if (result) {
     return (
       <main className="min-h-screen bg-gray-50">
         <div className="max-w-2xl mx-auto px-4 py-6 sm:py-8">
-          <AnalysisResults result={result} onReset={handleReset} />
+          <AnalysisResults 
+            result={result} 
+            onReset={handleReset} 
+            isPremium={isPremium}
+          />
         </div>
       </main>
     )
@@ -141,17 +210,88 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Subscription Banner */}
+      {!isPremium && (
+        <div className="bg-amber-50 border-b border-amber-200">
+          <div className="max-w-2xl mx-auto px-4 py-3">
+            <Link 
+              href="/pricing" 
+              className="flex items-center justify-center gap-2 text-amber-800 hover:text-amber-900 transition"
+            >
+              <Crown size={16} className="text-amber-600" />
+              <span className="text-sm font-medium">
+                {scanStatus?.scansToday && scanStatus.scansToday > 0 
+                  ? 'Daily scan used - Upgrade for unlimited scans'
+                  : 'Upgrade to Premium for unlimited scans + detailed reports'}
+              </span>
+              <Zap size={14} className="text-amber-600" />
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Premium Badge */}
+      {isPremium && (
+        <div className="bg-gradient-to-r from-amber-100 to-orange-100 border-b border-amber-200">
+          <div className="max-w-2xl mx-auto px-4 py-2">
+            <div className="flex items-center justify-center gap-2">
+              <Crown size={16} className="text-amber-600" />
+              <span className="text-sm font-medium text-amber-800">
+                Premium Member - Unlimited Scans
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Upload Section */}
       <section className="py-6 sm:py-8 px-4">
         <div className="max-w-2xl mx-auto">
+          {/* Scan Status */}
+          {!loadingStatus && scanStatus && scanStatus.tier === 'free' && (
+            <div className={`mb-4 p-3 rounded-xl text-sm flex items-center justify-between ${
+              scanStatus.canScan 
+                ? 'bg-emerald-50 text-emerald-800' 
+                : 'bg-amber-50 text-amber-800'
+            }`}>
+              <span className="flex items-center gap-2">
+                {scanStatus.canScan ? (
+                  <>
+                    <Sparkles size={16} />
+                    Free scan available today
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle size={16} />
+                    Daily scan limit reached
+                  </>
+                )}
+              </span>
+              <Link 
+                href="/pricing" 
+                className="font-medium underline hover:no-underline"
+              >
+                Upgrade
+              </Link>
+            </div>
+          )}
+
           {/* Error message */}
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800">
               <p className="font-medium">Analysis Error</p>
               <p className="text-sm">{error}</p>
+              {error.includes('limit') && (
+                <Link 
+                  href="/pricing"
+                  className="mt-3 inline-block bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition"
+                >
+                  Upgrade to Premium
+                </Link>
+              )}
               <button 
                 onClick={() => setError(null)}
-                className="mt-2 text-sm underline touch-manipulation"
+                className="block mt-2 text-sm underline touch-manipulation"
               >
                 Dismiss
               </button>
@@ -159,46 +299,71 @@ export default function Home() {
           )}
 
           {/* Image Upload/Preview */}
-          <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 mb-6">
-            <ImageUploader
-              onImageSelect={handleImageSelect}
-              selectedImage={selectedImage}
-              onClear={handleClear}
-            />
-
-            {/* Analyze Button */}
-            {selectedImage && (
-              <div className="mt-6 pt-6 border-t border-gray-100">
-                <button
-                  onClick={handleAnalyze}
-                  disabled={isAnalyzing}
-                  className="w-full py-4 px-6 bg-tcm-green text-white rounded-xl font-semibold text-lg 
-                           hover:bg-tcm-green-dark active:scale-[0.98] transition-all duration-200
-                           disabled:opacity-50 disabled:cursor-not-allowed
-                           flex items-center justify-center gap-3 shadow-lg
-                           min-h-[56px] touch-manipulation"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="animate-spin" size={24} />
-                      <span>Analyzing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={24} />
-                      <span>Analyze My Tongue</span>
-                    </>
-                  )}
-                </button>
-                <p className="text-center text-sm text-gray-500 mt-3">
-                  Takes about 10-15 seconds
+          <div className={`bg-white rounded-2xl shadow-lg p-4 sm:p-6 mb-6 ${
+            hasNoScansRemaining ? 'opacity-75' : ''
+          }`}>
+            {hasNoScansRemaining ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Lock className="w-8 h-8 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Daily Scan Limit Reached
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  You've used your free scan for today. Upgrade to Premium for unlimited scans!
                 </p>
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center gap-2 bg-amber-500 text-white px-6 py-3 rounded-xl font-semibold hover:bg-amber-600 transition"
+                >
+                  <Crown size={20} />
+                  Upgrade to Premium
+                </Link>
               </div>
+            ) : (
+              <>
+                <ImageUploader
+                  onImageSelect={handleImageSelect}
+                  selectedImage={selectedImage}
+                  onClear={handleClear}
+                />
+
+                {/* Analyze Button */}
+                {selectedImage && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <button
+                      onClick={handleAnalyze}
+                      disabled={isAnalyzing}
+                      className="w-full py-4 px-6 bg-tcm-green text-white rounded-xl font-semibold text-lg 
+                               hover:bg-tcm-green-dark active:scale-[0.98] transition-all duration-200
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               flex items-center justify-center gap-3 shadow-lg
+                               min-h-[56px] touch-manipulation"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="animate-spin" size={24} />
+                          <span>Analyzing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={24} />
+                          <span>Analyze My Tongue</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-center text-sm text-gray-500 mt-3">
+                      Takes about 10-15 seconds
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           {/* Info cards */}
-          {!selectedImage && (
+          {!selectedImage && !hasNoScansRemaining && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl p-4 shadow-sm text-center">
                 <div className="w-10 h-10 bg-tcm-green/10 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -250,6 +415,29 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Pricing Teaser */}
+      {!isPremium && (
+        <section className="bg-gradient-to-br from-emerald-600 to-emerald-800 text-white py-12 px-4">
+          <div className="max-w-2xl mx-auto text-center">
+            <Crown className="w-12 h-12 mx-auto mb-4 text-amber-400" />
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4">
+              Unlock Unlimited Scans
+            </h2>
+            <p className="text-emerald-100 mb-6">
+              Upgrade to Premium for just $9.99/month and get unlimited tongue scans, 
+              detailed PDF reports, and advanced pattern insights.
+            </p>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center gap-2 bg-white text-emerald-800 px-8 py-4 rounded-xl font-semibold hover:bg-emerald-50 transition"
+            >
+              <Zap size={20} />
+              View Pricing Plans
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-gray-900 text-gray-400 py-8 px-4">
