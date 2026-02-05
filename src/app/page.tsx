@@ -18,6 +18,7 @@ import ImageUploader from '@/components/ImageUploader'
 import AnalysisResults from '@/components/AnalysisResults'
 import { useToast } from '@/components/ui/ToastProvider'
 import { AnalysisLoadingSkeleton } from '@/components/ui/LoadingSkeletons'
+import { useAnalytics } from '@/hooks/useAnalytics'
 
 interface AnalysisResult {
   primaryPattern: string

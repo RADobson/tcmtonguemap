@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { Upload, Camera, X, RefreshCw, ImageIcon } from 'lucide-react'
+import { useAnalytics } from '@/hooks/useAnalytics'
 
 interface ImageUploaderProps {
   onImageSelect: (imageData: string, compressedFile?: File) => void
@@ -15,7 +16,7 @@ async function compressImage(
   maxWidth: number = 1200, 
   maxHeight: number = 1200, 
   quality: number = 0.85
-): Promise<{ dataUrl: string; compressedFile: File }> {
+): Promise<{ dataUrl: string; compressedFile: File; compressionRatio: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const canvas = document.createElement('canvas')
@@ -25,6 +26,8 @@ async function compressImage(
       reject(new Error('Could not get canvas context'))
       return
     }
+
+    const originalSize = file.size
 
     img.onload = () => {
       let { width, height } = img
@@ -58,8 +61,9 @@ async function compressImage(
       }
       
       const compressedFile = new File([ab], file.name, { type: mimeString })
+      const compressionRatio = Math.round((1 - compressedFile.size / originalSize) * 100)
       
-      resolve({ dataUrl, compressedFile })
+      resolve({ dataUrl, compressedFile, compressionRatio })
     }
     
     img.onerror = () => reject(new Error('Failed to load image'))
@@ -75,6 +79,8 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
   const videoRef = useRef<HTMLVideoElement>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
+  
+  const analytics = useAnalytics()
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -82,29 +88,40 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
+      analytics.trackScanError('gallery', 'invalid_file_type', 'File is not an image')
       alert('Please select an image file')
       return
     }
 
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
+      analytics.trackScanError('gallery', 'file_too_large', `Size: ${file.size}`)
       alert('Image size should be less than 10MB')
       return
     }
 
+    analytics.trackScanStart('gallery')
+    const startTime = Date.now()
+
     try {
-      const { dataUrl } = await compressImage(file, 1200, 1200, 0.85)
-      onImageSelect(dataUrl)
+      const { dataUrl, compressedFile, compressionRatio } = await compressImage(file, 1200, 1200, 0.85)
+      const duration = Date.now() - startTime
+      
+      analytics.trackScanSuccess('gallery', duration, compressedFile.size)
+      onImageSelect(dataUrl, compressedFile)
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Compression failed'
+      analytics.trackScanError('gallery', 'compression_failed', errorMessage)
+      
       console.error('Image compression failed:', error)
       // Fallback to original file
       const reader = new FileReader()
       reader.onloadend = () => {
-        onImageSelect(reader.result as string)
+        onImageSelect(reader.result as string, file)
       }
       reader.readAsDataURL(file)
     }
-  }, [onImageSelect])
+  }, [onImageSelect, analytics])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -121,22 +138,38 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
     setIsDragging(false)
     
     const file = e.dataTransfer.files?.[0]
-    if (!file || !file.type.startsWith('image/')) return
+    if (!file || !file.type.startsWith('image/')) {
+      if (file) {
+        analytics.trackScanError('drag_drop', 'invalid_file_type', file.type)
+      }
+      return
+    }
+
+    analytics.trackScanStart('drag_drop')
+    const startTime = Date.now()
 
     try {
-      const { dataUrl } = await compressImage(file, 1200, 1200, 0.85)
-      onImageSelect(dataUrl)
+      const { dataUrl, compressedFile, compressionRatio } = await compressImage(file, 1200, 1200, 0.85)
+      const duration = Date.now() - startTime
+      
+      analytics.trackScanSuccess('drag_drop', duration, compressedFile.size)
+      onImageSelect(dataUrl, compressedFile)
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Compression failed'
+      analytics.trackScanError('drag_drop', 'compression_failed', errorMessage)
+      
       const reader = new FileReader()
       reader.onloadend = () => {
-        onImageSelect(reader.result as string)
+        onImageSelect(reader.result as string, file)
       }
       reader.readAsDataURL(file)
     }
-  }, [onImageSelect])
+  }, [onImageSelect, analytics])
 
   const startCamera = useCallback(async () => {
     setCameraError(null)
+    analytics.trackScanStart('camera')
+    
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -156,12 +189,15 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
         }
       }, 100)
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Camera access denied'
       console.error('Camera access error:', err)
+      analytics.trackScanError('camera', 'access_denied', errorMessage)
+      
       setCameraError('Unable to access camera. Please check permissions or upload a photo instead.')
       // Fallback to file input with camera attribute
       cameraInputRef.current?.click()
     }
-  }, [])
+  }, [analytics])
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -186,9 +222,11 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
     
     // Compress the captured image
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    
+    analytics.trackScanSuccess('camera', 0)
     onImageSelect(dataUrl)
     stopCamera()
-  }, [onImageSelect, stopCamera])
+  }, [onImageSelect, stopCamera, analytics])
 
   // Show captured image preview
   if (selectedImage) {
