@@ -2,9 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600&display=swap');
+
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 245, 245, 220;
+  --foreground-rgb: 26, 26, 46;
+  --background-start-rgb: 250, 248, 243;
   --background-end-rgb: 255, 255, 255;
 }
 
@@ -16,4 +18,178 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+}
+
+/* TCM Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #faf8f3;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9a227;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a0821f;
+}
+
+/* TCM Card Styles */
+.tcm-card {
+  background: linear-gradient(135deg, #ffffff 0%, #faf8f3 100%);
+  border: 1px solid rgba(201, 162, 39, 0.2);
+  box-shadow: 0 4px 6px -1px rgba(45, 90, 39, 0.1), 0 2px 4px -1px rgba(45, 90, 39, 0.06);
+}
+
+.tcm-card:hover {
+  box-shadow: 0 10px 15px -3px rgba(45, 90, 39, 0.15), 0 4px 6px -2px rgba(45, 90, 39, 0.1);
+}
+
+/* TCM Button Styles */
+.btn-tcm-primary {
+  background: linear-gradient(135deg, #2d5a27 0%, #1a3d16 100%);
+  border: 1px solid #1a3d16;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-tcm-primary:hover {
+  background: linear-gradient(135deg, #3d7a35 0%, #2d5a27 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(45, 90, 39, 0.3);
+}
+
+.btn-tcm-secondary {
+  background: linear-gradient(135deg, #8b4513 0%, #5c2e0c 100%);
+  border: 1px solid #5c2e0c;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-tcm-secondary:hover {
+  background: linear-gradient(135deg, #a0522d 0%, #8b4513 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 69, 19, 0.3);
+}
+
+/* TCM Badge Styles */
+.badge-tcm {
+  background: linear-gradient(135deg, rgba(201, 162, 39, 0.15) 0%, rgba(201, 162, 39, 0.05) 100%);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  color: #8b4513;
+}
+
+/* Pattern Indicator Styles */
+.pattern-indicator {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.pattern-indicator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 70%;
+  background: linear-gradient(to bottom, #c9a227, #8b4513);
+  border-radius: 2px;
+}
+
+/* TCM Seal/Stamp Style */
+.tcm-seal {
+  border: 2px solid #c41e3a;
+  color: #c41e3a;
+  font-family: 'Noto Serif SC', serif;
+  font-weight: 700;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Section Divider */
+.tcm-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #c9a227, transparent);
+  margin: 2rem 0;
+}
+
+/* Educational Content Accordion */
+.edu-accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.edu-accordion-content.open {
+  max-height: 1000px;
+}
+
+/* Tongue Zone Map */
+.tongue-zone {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.tongue-zone:hover {
+  filter: brightness(1.05);
+}
+
+.tongue-zone.active {
+  stroke: #c9a227;
+  stroke-width: 2;
+}
+
+/* Herbal Formula Card */
+.formula-card {
+  background: linear-gradient(135deg, #faf8f3 0%, #f5f0e6 100%);
+  border-left: 4px solid #2d5a27;
+}
+
+/* Animation Classes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .tcm-card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
 }
