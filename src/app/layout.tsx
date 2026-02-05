@@ -5,6 +5,7 @@ import { AuthProvider } from '@/components/AuthProvider'
 import Navigation from '@/components/Navigation'
 import { ToastProvider } from '@/components/ui/ToastProvider'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
+import GA4Provider from '@/components/GA4Provider'
 
 const inter = Inter({ 
   subsets: ['latin'],
