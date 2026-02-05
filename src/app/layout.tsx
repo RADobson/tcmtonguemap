@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
 import Navigation from '@/components/Navigation'
+import { ToastProvider } from '@/components/ui/ToastProvider'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -54,10 +56,14 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192x192.png" />
       </head>
       <body className={`${inter.className} antialiased`}>
-        <AuthProvider>
-          <Navigation />
-          {children}
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <ToastProvider>
+              <Navigation />
+              {children}
+            </ToastProvider>
+          </AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   )
