@@ -16,6 +16,8 @@ import {
 import Link from 'next/link'
 import ImageUploader from '@/components/ImageUploader'
 import AnalysisResults from '@/components/AnalysisResults'
+import { useToast } from '@/components/ui/ToastProvider'
+import { AnalysisLoadingSkeleton } from '@/components/ui/LoadingSkeletons'
 
 interface AnalysisResult {
   primaryPattern: string
@@ -48,10 +50,10 @@ export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [result, setResult] = useState<AnalysisResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null)
   const [subscription, setSubscription] = useState<any>(null)
   const [loadingStatus, setLoadingStatus] = useState(true)
+  const { showToast } = useToast()
 
   // Check scan status on load
   useEffect(() => {
@@ -68,6 +70,7 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Error checking scan status:', err)
+      showToast('Failed to check scan status', 'error')
     } finally {
       setLoadingStatus(false)
     }
@@ -88,30 +91,43 @@ export default function Home() {
   const handleImageSelect = useCallback(async (imageData: string) => {
     setSelectedImage(imageData)
     setResult(null)
-    setError(null)
-  }, [])
+    showToast('Image uploaded successfully', 'success', { duration: 2000 })
+  }, [showToast])
 
   const handleClear = useCallback(() => {
     setSelectedImage(null)
     setResult(null)
-    setError(null)
-  }, [])
+    showToast('Image cleared', 'info', { duration: 2000 })
+  }, [showToast])
 
   const handleAnalyze = useCallback(async () => {
     if (!selectedImage) return
     
     // Check scan limit before analyzing
-    const scanCheckResponse = await fetch('/api/scan-limit')
-    if (scanCheckResponse.ok) {
-      const scanData = await scanCheckResponse.json()
-      if (!scanData.canScan) {
-        setError('Daily scan limit reached. Upgrade to Premium for unlimited scans!')
-        return
+    try {
+      const scanCheckResponse = await fetch('/api/scan-limit')
+      if (scanCheckResponse.ok) {
+        const scanData = await scanCheckResponse.json()
+        if (!scanData.canScan) {
+          showToast(
+            'Daily scan limit reached. Upgrade for unlimited scans!',
+            'warning',
+            {
+              duration: 6000,
+              action: {
+                label: 'Upgrade',
+                onClick: () => window.location.href = '/pricing'
+              }
+            }
+          )
+          return
+        }
       }
+    } catch (err) {
+      console.error('Error checking scan limit:', err)
     }
     
     setIsAnalyzing(true)
-    setError(null)
     
     try {
       const response = await fetch('/api/analyze', {
@@ -134,6 +150,7 @@ export default function Home() {
       await checkScanStatus()
       
       setResult(data)
+      showToast('Analysis completed successfully!', 'success')
       
       // Scroll to results on mobile
       setTimeout(() => {
@@ -141,21 +158,34 @@ export default function Home() {
       }, 100)
     } catch (error) {
       console.error('Analysis failed:', error)
-      setError(error instanceof Error ? error.message : 'Analysis failed. Please try again.')
+      const errorMessage = error instanceof Error ? error.message : 'Analysis failed. Please try again.'
+      
+      showToast(errorMessage, 'error', {
+        duration: 6000,
+        action: {
+          label: 'Try Again',
+          onClick: () => handleAnalyze()
+        }
+      })
     } finally {
       setIsAnalyzing(false)
     }
-  }, [selectedImage])
+  }, [selectedImage, showToast])
 
   const handleReset = useCallback(() => {
     setSelectedImage(null)
     setResult(null)
-    setError(null)
     checkScanStatus()
-  }, [])
+    showToast('Ready for new analysis', 'info', { duration: 2000 })
+  }, [showToast])
 
   const isPremium = subscription?.hasPremium
   const hasNoScansRemaining = scanStatus && !scanStatus.canScan && scanStatus.tier === 'free'
+
+  // Show analysis loading state
+  if (isAnalyzing) {
+    return <AnalysisLoadingSkeleton />
+  }
 
   // Show results view
   if (result) {
@@ -273,28 +303,6 @@ export default function Home() {
               >
                 Upgrade
               </Link>
-            </div>
-          )}
-
-          {/* Error message */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800">
-              <p className="font-medium">Analysis Error</p>
-              <p className="text-sm">{error}</p>
-              {error.includes('limit') && (
-                <Link 
-                  href="/pricing"
-                  className="mt-3 inline-block bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition"
-                >
-                  Upgrade to Premium
-                </Link>
-              )}
-              <button 
-                onClick={() => setError(null)}
-                className="block mt-2 text-sm underline touch-manipulation"
-              >
-                Dismiss
-              </button>
             </div>
           )}
 
