@@ -140,6 +140,7 @@ interface AnalysisResult {
 interface AnalysisResultsProps {
   result: AnalysisResult
   onReset: () => void
+  isPremium?: boolean
 }
 
 // Confidence score display component
@@ -443,7 +444,7 @@ function PatternCard({ pattern, isPrimary = false }: { pattern: Pattern; isPrima
 }
 
 // Main component
-export default function AnalysisResults({ result, onReset }: AnalysisResultsProps) {
+export default function AnalysisResults({ result, onReset, isPremium = false }: AnalysisResultsProps) {
   const { user } = useAuth()
   const [activeZone, setActiveZone] = useState<string | null>('center')
 
