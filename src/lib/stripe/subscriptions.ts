@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { stripe } from '@/lib/stripe/config'
 
 export async function getOrCreateStripeCustomer(userId: string, email: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   // Check if user already has a Stripe customer ID
   const { data: subscription } = await supabase
@@ -37,7 +37,7 @@ export async function getOrCreateStripeCustomer(userId: string, email: string) {
 }
 
 export async function getSubscriptionStatus(userId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from('subscriptions')

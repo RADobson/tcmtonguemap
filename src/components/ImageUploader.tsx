@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Upload, Camera, X, RefreshCw, ImageIcon } from 'lucide-react'
-import { useAnalytics } from '@/hooks/useAnalytics'
+import { Upload, Camera, X, ImageIcon, Loader2 } from 'lucide-react'
+import { useToast } from '@/components/ui/ToastProvider'
 
 interface ImageUploaderProps {
   onImageSelect: (imageData: string, compressedFile?: File) => void
@@ -16,7 +16,7 @@ async function compressImage(
   maxWidth: number = 1200, 
   maxHeight: number = 1200, 
   quality: number = 0.85
-): Promise<{ dataUrl: string; compressedFile: File; compressionRatio: number }> {
+): Promise<{ dataUrl: string; compressedFile: File }> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const canvas = document.createElement('canvas')
@@ -26,8 +26,6 @@ async function compressImage(
       reject(new Error('Could not get canvas context'))
       return
     }
-
-    const originalSize = file.size
 
     img.onload = () => {
       let { width, height } = img
@@ -61,9 +59,8 @@ async function compressImage(
       }
       
       const compressedFile = new File([ab], file.name, { type: mimeString })
-      const compressionRatio = Math.round((1 - compressedFile.size / originalSize) * 100)
       
-      resolve({ dataUrl, compressedFile, compressionRatio })
+      resolve({ dataUrl, compressedFile })
     }
     
     img.onerror = () => reject(new Error('Failed to load image'))
@@ -73,14 +70,13 @@ async function compressImage(
 
 export default function ImageUploader({ onImageSelect, selectedImage, onClear }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const [cameraError, setCameraError] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
-  
-  const analytics = useAnalytics()
+  const { showToast } = useToast()
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -88,40 +84,37 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      analytics.trackScanError('gallery', 'invalid_file_type', 'File is not an image')
-      alert('Please select an image file')
+      showToast('Please select an image file (JPG, PNG, etc.)', 'error')
       return
     }
 
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      analytics.trackScanError('gallery', 'file_too_large', `Size: ${file.size}`)
-      alert('Image size should be less than 10MB')
+      showToast('Image size should be less than 10MB', 'error')
       return
     }
 
-    analytics.trackScanStart('gallery')
-    const startTime = Date.now()
-
+    setIsProcessing(true)
+    
     try {
-      const { dataUrl, compressedFile, compressionRatio } = await compressImage(file, 1200, 1200, 0.85)
-      const duration = Date.now() - startTime
-      
-      analytics.trackScanSuccess('gallery', duration, compressedFile.size)
-      onImageSelect(dataUrl, compressedFile)
+      const { dataUrl } = await compressImage(file, 1200, 1200, 0.85)
+      onImageSelect(dataUrl)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Compression failed'
-      analytics.trackScanError('gallery', 'compression_failed', errorMessage)
-      
       console.error('Image compression failed:', error)
+      showToast('Processing image...', 'info', { duration: 2000 })
       // Fallback to original file
       const reader = new FileReader()
       reader.onloadend = () => {
-        onImageSelect(reader.result as string, file)
+        onImageSelect(reader.result as string)
+      }
+      reader.onerror = () => {
+        showToast('Failed to load image. Please try another.', 'error')
       }
       reader.readAsDataURL(file)
+    } finally {
+      setIsProcessing(false)
     }
-  }, [onImageSelect, analytics])
+  }, [onImageSelect, showToast])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -138,38 +131,30 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
     setIsDragging(false)
     
     const file = e.dataTransfer.files?.[0]
-    if (!file || !file.type.startsWith('image/')) {
-      if (file) {
-        analytics.trackScanError('drag_drop', 'invalid_file_type', file.type)
-      }
+    if (!file) return
+    
+    if (!file.type.startsWith('image/')) {
+      showToast('Please drop an image file', 'error')
       return
     }
 
-    analytics.trackScanStart('drag_drop')
-    const startTime = Date.now()
-
+    setIsProcessing(true)
+    
     try {
-      const { dataUrl, compressedFile, compressionRatio } = await compressImage(file, 1200, 1200, 0.85)
-      const duration = Date.now() - startTime
-      
-      analytics.trackScanSuccess('drag_drop', duration, compressedFile.size)
-      onImageSelect(dataUrl, compressedFile)
+      const { dataUrl } = await compressImage(file, 1200, 1200, 0.85)
+      onImageSelect(dataUrl)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Compression failed'
-      analytics.trackScanError('drag_drop', 'compression_failed', errorMessage)
-      
       const reader = new FileReader()
       reader.onloadend = () => {
-        onImageSelect(reader.result as string, file)
+        onImageSelect(reader.result as string)
       }
       reader.readAsDataURL(file)
+    } finally {
+      setIsProcessing(false)
     }
-  }, [onImageSelect, analytics])
+  }, [onImageSelect, showToast])
 
   const startCamera = useCallback(async () => {
-    setCameraError(null)
-    analytics.trackScanStart('camera')
-    
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -189,15 +174,16 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
         }
       }, 100)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Camera access denied'
       console.error('Camera access error:', err)
-      analytics.trackScanError('camera', 'access_denied', errorMessage)
-      
-      setCameraError('Unable to access camera. Please check permissions or upload a photo instead.')
+      showToast(
+        'Camera access denied. Please check permissions or upload a photo instead.',
+        'warning',
+        { duration: 5000 }
+      )
       // Fallback to file input with camera attribute
       cameraInputRef.current?.click()
     }
-  }, [analytics])
+  }, [showToast])
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -216,22 +202,23 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
     canvas.height = video.videoHeight
     
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) {
+      showToast('Failed to capture photo. Please try again.', 'error')
+      return
+    }
     
     ctx.drawImage(video, 0, 0)
     
     // Compress the captured image
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
-    
-    analytics.trackScanSuccess('camera', 0)
     onImageSelect(dataUrl)
     stopCamera()
-  }, [onImageSelect, stopCamera, analytics])
+  }, [onImageSelect, stopCamera, showToast])
 
   // Show captured image preview
   if (selectedImage) {
     return (
-      <div className="w-full">
+      <div className="w-full animate-fade-in">
         <div className="relative aspect-[4/3] max-h-[60vh] overflow-hidden rounded-2xl bg-gray-100 shadow-lg">
           <img
             src={selectedImage}
@@ -257,7 +244,7 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
   // Show camera interface
   if (showCamera) {
     return (
-      <div className="w-full">
+      <div className="w-full animate-fade-in">
         <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-black shadow-lg">
           <video
             ref={videoRef}
@@ -266,6 +253,14 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
             muted
             className="w-full h-full object-cover"
           />
+          {/* Camera guide overlay */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-3/4 h-2/3 border-2 border-white/50 border-dashed rounded-2xl flex items-center justify-center">
+              <p className="text-white/70 text-sm bg-black/30 px-3 py-1 rounded-full">
+                Position tongue here
+              </p>
+            </div>
+          </div>
           <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
             <div className="flex items-center justify-center gap-4">
               <button
@@ -291,22 +286,16 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
 
   return (
     <div className="w-full space-y-4">
-      {/* Error message */}
-      {cameraError && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
-          {cameraError}
-        </div>
-      )}
-
       {/* Drag and drop zone */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !isProcessing && fileInputRef.current?.click()}
         className={`
           relative p-8 sm:p-12 border-2 border-dashed rounded-2xl cursor-pointer
           transition-all duration-200 ease-out
+          ${isProcessing ? 'cursor-wait opacity-75' : ''}
           ${isDragging 
             ? 'border-tcm-green bg-tcm-green/5 scale-[1.02]' 
             : 'border-gray-300 hover:border-tcm-green hover:bg-gray-50'
@@ -319,6 +308,7 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
           onChange={handleFileChange}
           accept="image/*"
           className="hidden"
+          disabled={isProcessing}
         />
         <input
           type="file"
@@ -327,28 +317,45 @@ export default function ImageUploader({ onImageSelect, selectedImage, onClear }:
           accept="image/*"
           capture="environment"
           className="hidden"
+          disabled={isProcessing}
         />
         
         <div className="flex flex-col items-center text-center space-y-3">
-          <div className="w-16 h-16 bg-tcm-green/10 rounded-full flex items-center justify-center">
-            <Upload className="w-8 h-8 text-tcm-green" />
-          </div>
-          <div>
-            <p className="text-lg font-medium text-gray-900">
-              {isDragging ? 'Drop your image here' : 'Tap to upload a photo'}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              JPG, PNG up to 10MB
-            </p>
-          </div>
+          {isProcessing ? (
+            <>
+              <div className="w-16 h-16 bg-tcm-green/10 rounded-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-tcm-green animate-spin" />
+              </div>
+              <div>
+                <p className="text-lg font-medium text-gray-900">Processing image...</p>
+                <p className="text-sm text-gray-500 mt-1">Please wait</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-16 h-16 bg-tcm-green/10 rounded-full flex items-center justify-center">
+                <Upload className="w-8 h-8 text-tcm-green" />
+              </div>
+              <div>
+                <p className="text-lg font-medium text-gray-900">
+                  {isDragging ? 'Drop your image here' : 'Tap to upload a photo'}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  JPG, PNG up to 10MB
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Camera button - prominent on mobile */}
       <button
         onClick={startCamera}
+        disabled={isProcessing}
         className="w-full py-4 px-6 bg-tcm-green text-white rounded-xl font-semibold text-lg 
                    hover:bg-tcm-green-dark active:scale-[0.98] transition-all duration-200
+                   disabled:opacity-50 disabled:cursor-not-allowed
                    flex items-center justify-center gap-3 shadow-md hover:shadow-lg
                    min-h-[56px] touch-manipulation"
       >

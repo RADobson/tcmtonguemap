@@ -14,7 +14,13 @@ import {
   Leaf,
   Menu,
   X,
-  ArrowLeft
+  ArrowLeft,
+  Crown,
+  Zap,
+  CreditCard,
+  CheckCircle,
+  AlertCircle,
+  Settings
 } from 'lucide-react'
 
 interface TongueScan {
@@ -28,6 +34,14 @@ interface TongueScan {
   moisture: string
   recommendations: string
   recommended_formula: string
+}
+
+interface Subscription {
+  tier: string
+  status: string
+  hasPremium: boolean
+  currentPeriodEnd?: string
+  cancelAtPeriodEnd?: boolean
 }
 
 // Mock data for demo
@@ -47,16 +61,68 @@ const mockScans: TongueScan[] = [
 ]
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>({ email: 'user@example.com' })
+  const [user, setUser] = useState<any>(null)
   const [scans, setScans] = useState<TongueScan[]>(mockScans)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [selectedScan, setSelectedScan] = useState<TongueScan | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [subscription, setSubscription] = useState<Subscription | null>(null)
+  const [portalLoading, setPortalLoading] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    fetchUserData()
+    fetchSubscription()
+  }, [])
+
+  const fetchUserData = async () => {
+    try {
+      const res = await fetch('/api/auth/user')
+      if (res.ok) {
+        const data = await res.json()
+        setUser(data.user)
+      } else {
+        router.push('/login')
+      }
+    } catch (err) {
+      console.error('Error fetching user:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchSubscription = async () => {
+    try {
+      const res = await fetch('/api/subscription/status')
+      if (res.ok) {
+        const data = await res.json()
+        setSubscription(data)
+      }
+    } catch (err) {
+      console.error('Error fetching subscription:', err)
+    }
+  }
 
   const handleLogout = async () => {
     router.push('/')
     router.refresh()
+  }
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true)
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' })
+      if (res.ok) {
+        const { url } = await res.json()
+        if (url) {
+          window.location.href = url
+        }
+      }
+    } catch (err) {
+      console.error('Error opening portal:', err)
+    } finally {
+      setPortalLoading(false)
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -66,6 +132,15 @@ export default function DashboardPage() {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+    })
+  }
+
+  const formatSubscriptionDate = (dateString?: string) => {
+    if (!dateString) return ''
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
     })
   }
 
@@ -146,6 +221,8 @@ export default function DashboardPage() {
     )
   }
 
+  const isPremium = subscription?.hasPremium
+
   return (
     <main className="min-h-screen bg-gray-50">
       {/* Navigation */}
@@ -161,6 +238,12 @@ export default function DashboardPage() {
             
             {/* Desktop nav */}
             <div className="hidden sm:flex items-center gap-4">
+              {isPremium && (
+                <span className="flex items-center gap-1 bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-medium">
+                  <Crown size={14} />
+                  Premium
+                </span>
+              )}
               <span className="text-gray-600 text-sm">
                 {user?.email}
               </span>
@@ -187,6 +270,12 @@ export default function DashboardPage() {
         {mobileMenuOpen && (
           <div className="sm:hidden bg-white border-t">
             <div className="px-4 py-3 space-y-3">
+              {isPremium && (
+                <div className="flex items-center gap-1 bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-medium w-fit">
+                  <Crown size={14} />
+                  Premium
+                </div>
+              )}
               <p className="text-sm text-gray-600 truncate">{user?.email}</p>
               <button
                 onClick={handleLogout}
@@ -209,6 +298,79 @@ export default function DashboardPage() {
           <p className="text-gray-600 text-sm sm:text-base">
             Track your tongue health journey
           </p>
+        </div>
+
+        {/* Subscription Status Card */}
+        <div className={`mb-6 sm:mb-8 rounded-2xl p-5 sm:p-6 ${
+          isPremium 
+            ? 'bg-gradient-to-r from-amber-100 to-orange-100 border border-amber-200'
+            : 'bg-white border border-gray-200 shadow-sm'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                isPremium ? 'bg-amber-200' : 'bg-gray-100'
+              }`}>
+                {isPremium ? (
+                  <Crown className="w-6 h-6 text-amber-700" />
+                ) : (
+                  <User className="w-6 h-6 text-gray-500" />
+                )}
+              </div>
+              <div>
+                <h2 className="font-semibold text-lg text-gray-900">
+                  {isPremium ? 'Premium Plan' : 'Free Plan'}
+                </h2>
+                {isPremium ? (
+                  <div className="text-sm text-amber-800">
+                    <p className="flex items-center gap-1">
+                      <CheckCircle size={14} />
+                      Unlimited scans + Detailed reports
+                    </p>
+                    {subscription?.cancelAtPeriodEnd ? (
+                      <p className="flex items-center gap-1 text-amber-600 mt-1">
+                        <AlertCircle size={14} />
+                        Cancels on {formatSubscriptionDate(subscription.currentPeriodEnd)}
+                      </p>
+                    ) : (
+                      <p className="text-amber-700 mt-1">
+                        Renews {formatSubscriptionDate(subscription?.currentPeriodEnd)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    1 scan per day • Basic analysis
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              {isPremium ? (
+                <button
+                  onClick={handleManageSubscription}
+                  disabled={portalLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-amber-300 text-amber-800 rounded-xl font-medium hover:bg-amber-50 transition disabled:opacity-50"
+                >
+                  {portalLoading ? (
+                    <Loader2 className="animate-spin" size={18} />
+                  ) : (
+                    <Settings size={18} />
+                  )}
+                  Manage Subscription
+                </button>
+              ) : (
+                <Link
+                  href="/pricing"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl font-semibold hover:bg-amber-600 transition"
+                >
+                  <Zap size={18} />
+                  Upgrade to Premium
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Quick Actions - Horizontal scroll on mobile */}

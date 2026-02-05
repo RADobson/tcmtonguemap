@@ -34,6 +34,12 @@ export default function Navigation({ user, onSignOut }: NavigationProps) {
 
           {/* Desktop Navigation */}
           <div className="hidden sm:flex items-center gap-4">
+            <Link
+              href="/pricing"
+              className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100 transition"
+            >
+              Pricing
+            </Link>
             {user ? (
               <>
                 <Link
@@ -85,6 +91,13 @@ export default function Navigation({ user, onSignOut }: NavigationProps) {
         {mobileMenuOpen && (
           <div className="sm:hidden border-t py-4 animate-fade-in">
             <div className="flex flex-col gap-1">
+              <Link
+                href="/pricing"
+                className="text-gray-600 hover:text-gray-900 px-3 py-3 rounded-xl hover:bg-gray-100 transition touch-manipulation"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Pricing
+              </Link>
               {user ? (
                 <>
                   <Link

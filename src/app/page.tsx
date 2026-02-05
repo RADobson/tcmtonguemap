@@ -55,6 +55,7 @@ export default function Home() {
   const [subscription, setSubscription] = useState<any>(null)
   const [loadingStatus, setLoadingStatus] = useState(true)
   const { showToast } = useToast()
+  const analytics = useAnalytics()
 
   // Check scan status on load
   useEffect(() => {
@@ -110,6 +111,9 @@ export default function Home() {
       if (scanCheckResponse.ok) {
         const scanData = await scanCheckResponse.json()
         if (!scanData.canScan) {
+          // Track scan limit reached event
+          analytics.trackLimitReached(scanData.tier as 'free' | 'premium', scanData.scansToday)
+          
           showToast(
             'Daily scan limit reached. Upgrade for unlimited scans!',
             'warning',
@@ -129,6 +133,10 @@ export default function Home() {
     }
     
     setIsAnalyzing(true)
+    const analysisStartTime = Date.now()
+    
+    // Track analysis start
+    analytics.trackAnalysisBegin()
     
     try {
       const response = await fetch('/api/analyze', {
@@ -143,12 +151,23 @@ export default function Home() {
       }
       
       const data = await response.json()
+      const analysisDuration = Date.now() - analysisStartTime
       
       // Record the scan after successful analysis
       await fetch('/api/scan-limit', { method: 'POST' })
       
       // Refresh scan status
       await checkScanStatus()
+      
+      // Track analysis completion with details
+      analytics.trackAnalysisSuccess({
+        primaryPattern: data.patternDifferentiation?.primaryPattern?.name || data.primaryPattern,
+        confidenceScore: data.patternDifferentiation?.primaryPattern?.confidence,
+        hasFormula: !!data.herbalFormula?.recommended,
+        hasAcupuncture: !!data.acupuncture?.primaryPoints?.length,
+        hasLifestyle: !!data.lifestyleRecommendations,
+        durationMs: analysisDuration,
+      })
       
       setResult(data)
       showToast('Analysis completed successfully!', 'success')
@@ -160,6 +179,12 @@ export default function Home() {
     } catch (error) {
       console.error('Analysis failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Analysis failed. Please try again.'
+      
+      // Track analysis error
+      analytics.trackAnalysisFailure(
+        error instanceof Error ? error.name : 'UnknownError',
+        errorMessage
+      )
       
       showToast(errorMessage, 'error', {
         duration: 6000,

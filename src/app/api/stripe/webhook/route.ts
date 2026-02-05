@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import Stripe from 'stripe'
 import { stripe } from '@/lib/stripe/config'
 import { createClient } from '@/lib/supabase/server'
+import { trackSubscriptionEvent } from '@/lib/analytics-server'
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Handle the event
     switch (event.type) {
@@ -62,6 +63,15 @@ export async function POST(req: NextRequest) {
               }, {
                 onConflict: 'user_id',
               })
+            
+            // Track subscription created event
+            await trackSubscriptionEvent('created', {
+              userId,
+              subscriptionId: subscription.id,
+              tier: 'premium',
+              value: (session.amount_total || 0) / 100,
+              currency: session.currency || 'usd',
+            })
           }
         }
         break
@@ -94,6 +104,15 @@ export async function POST(req: NextRequest) {
               }, {
                 onConflict: 'user_id',
               })
+            
+            // Track payment succeeded event
+            await trackSubscriptionEvent('payment_succeeded', {
+              userId,
+              subscriptionId: subscription.id,
+              tier: 'premium',
+              value: (invoice.amount_paid || 0) / 100,
+              currency: invoice.currency || 'usd',
+            })
           }
         }
         break
@@ -122,6 +141,7 @@ export async function POST(req: NextRequest) {
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
+        const userId = subscription.metadata?.supabaseUserId
         
         // Downgrade to free tier when subscription is canceled
         await supabase
@@ -136,6 +156,15 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .eq('stripe_subscription_id', subscription.id)
+        
+        // Track subscription cancelled event
+        if (userId) {
+          await trackSubscriptionEvent('cancelled', {
+            userId,
+            subscriptionId: subscription.id,
+            tier: 'free',
+          })
+        }
         break
       }
 

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Loader2, Mail, Lock, Eye, EyeOff, Leaf, CheckCircle } from 'lucide-react'
+import { trackSignUp } from '@/lib/analytics'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -35,6 +36,9 @@ export default function SignupPage() {
     try {
       // For demo, show success
       setSuccess(true)
+      
+      // Track successful signup
+      trackSignUp('email')
     } catch (err) {
       setError('An unexpected error occurred')
     } finally {
