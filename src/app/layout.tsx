@@ -57,14 +57,16 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192x192.png" />
       </head>
       <body className={`${inter.className} antialiased`}>
-        <ErrorBoundary>
-          <AuthProvider>
-            <ToastProvider>
-              <Navigation />
-              {children}
-            </ToastProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+        <GA4Provider measurementId={process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID || ''}>
+          <ErrorBoundary>
+            <AuthProvider>
+              <ToastProvider>
+                <Navigation />
+                {children}
+              </ToastProvider>
+            </AuthProvider>
+          </ErrorBoundary>
+        </GA4Provider>
       </body>
     </html>
   )
